@@ -1,0 +1,11 @@
+[package]
+name = "ray-traing-in-a-weekend"
+version = "0.1.0"
+authors = ["Evgeniy Baranov <me@ebaranov.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+xorshift = "0.1"
+time = "0.1.42"
