@@ -1,10 +1,13 @@
 use crate::vec3::Vec3;
 use crate::ray::Ray;
+use std::sync::Arc;
+use crate::material::Material;
 
 pub(crate) struct Hit {
     pub(crate) t: f64,
     pub(crate) p: Vec3,
     pub(crate) normal: Vec3,
+    pub(crate) material: Arc<dyn Material>,
 }
 
 pub(crate) struct HittableCollection {
@@ -12,8 +15,8 @@ pub(crate) struct HittableCollection {
 }
 
 impl Hit {
-    pub(crate) fn new(t: f64, p: Vec3, normal: Vec3) -> Self {
-        Hit {t, p, normal}
+    pub(crate) fn new(t: f64, p: Vec3, normal: Vec3, material: Arc<dyn Material>) -> Self {
+        Hit {t, p, normal, material}
     }
 }
 

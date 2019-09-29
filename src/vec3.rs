@@ -1,4 +1,5 @@
 use std::ops::{Add, Sub, Mul, Div};
+use std::fmt;
 
 #[derive(PartialEq,Debug,Clone,Copy)]
 pub(crate) struct Vec3(pub(crate) f64, pub(crate) f64, pub(crate) f64);
@@ -35,6 +36,19 @@ impl Vec3 {
         self.0 * rhs.0 +
         self.1 * rhs.1 +
         self.2 * rhs.2
+    }
+    pub(crate) fn cross(&self, rhs: Self) -> Self {
+        Vec3(
+            self.1 * rhs.2 - self.2 * rhs.1,
+            self.2 * rhs.0 - self.0 * rhs.2,
+            self.0 * rhs.1 - self.1 * rhs.0,
+        )
+    }
+}
+
+impl fmt::Display for Vec3 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Vec3({}, {}, {},)", self.0, self.1, self.2)
     }
 }
 
@@ -95,6 +109,16 @@ impl Default for Vec3 {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_vec3_methods() {
+        let v = Vec3(0.11, 0.22, 0.33);
+        assert_eq!(0.11, v.x());
+        assert_eq!(0.22, v.y());
+        assert_eq!(0.33, v.z());
+        assert_eq!(0.11, v.r());
+        assert_eq!(0.22, v.g());
+        assert_eq!(0.33, v.b());
+    }
     #[test]
     fn test_vec3_add() {
         assert_eq!(Vec3(1., 2., 3.) + Vec3(1., 2., 3.), Vec3(2., 4., 6.))

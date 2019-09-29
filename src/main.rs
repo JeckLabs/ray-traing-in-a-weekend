@@ -19,6 +19,8 @@ extern crate xorshift;
 
 use time::precise_time_ns;
 use xorshift::{Rand, Rng, SeedableRng, SplitMix64, Xoroshiro128};
+use std::sync::Arc;
+use crate::material::{Metal, Dielectric};
 
 fn random_in_unit_sphere() -> Vec3 {
     let now = precise_time_ns();
@@ -36,17 +38,75 @@ fn random_in_unit_sphere() -> Vec3 {
 }
 
 
-fn color(r: &Ray, world: &HittableCollection) -> Vec3 {
+fn color(r: &Ray, world: &HittableCollection, depth: i32) -> Vec3 {
+    if depth > 50 {
+        return Vec3::default()
+    }
     if let Some(hit) = world.hit(r, 0.001, std::f64::MAX) {
-        let target = hit.p + hit.normal + random_in_unit_sphere();
-//        let nu = hit.normal.unit_vector();
-//        Vec3(nu.x() + 1., nu.y() + 1., nu.z() + 1.) * 0.5
-        color(&Ray::new(hit.p, target - hit.p), world) * 0.5
+        if let Some((attenuation, scattered)) = hit.material.scatter(r, &hit) {
+            attenuation * color(&scattered, world, depth + 1)
+        } else {
+            Vec3::default()
+        }
     } else {
         let unit_direction = r.direction().unit_vector();
         let t = 0.5 * (unit_direction.y() + 1.);
         Vec3(1., 1., 1.) * (1. - t) + Vec3(0.5, 0.7, 1.) * t
     }
+}
+
+fn random_scene() -> HittableCollection {
+    let mut objects: Vec<Box<dyn Hittable>> = Vec::new();
+
+    let now = precise_time_ns();
+    let mut sm: SplitMix64 = SeedableRng::from_seed(now);
+    let mut rng: Xoroshiro128 = Rand::rand(&mut sm);
+
+    // ground
+    objects.push(Box::new(Sphere::new(
+        Vec3(0., -1000., 0.),
+        1000.,
+        Arc::new(Lambertian::new(Vec3(0.5, 0.5, 0.5)))
+    )));
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let chose_mat = rng.next_f64();
+            let center = Vec3(a as f64 + 0.9 * rng.next_f64(), 0.2, b as f64 + 0.9 * rng.next_f64());
+            let distance = (center - Vec3(4., 0.2, 0.)).length();
+            if distance < 0.9 {
+                continue;
+            }
+            if chose_mat < 0.8 { // diffuse
+                let color = Vec3(rng.next_f64() * rng.next_f64(), rng.next_f64() * rng.next_f64(), rng.next_f64() * rng.next_f64());
+                objects.push(Box::new(Sphere::new(center, 0.2, Arc::new(Lambertian::new(color)))));
+            } else if chose_mat < 0.95 { // metal
+                let color = Vec3(0.5 * (1. + rng.next_f64()), 0.5 * (1. + rng.next_f64()), 0.5 * (1. + rng.next_f64()));
+                let fuzz = 0.5 * rng.next_f64();
+                objects.push(Box::new(Sphere::new(center, 0.2, Arc::new(Metal::new(color, fuzz)))));
+            } else { // glass
+                objects.push(Box::new(Sphere::new(center, 0.2, Arc::new(Dielectric::new(1.5)))));
+            }
+        }
+    }
+
+    objects.push(Box::new(Sphere::new(
+        Vec3(0., 1., 0.),
+        1.,
+        Arc::new(Dielectric::new(1.5))
+    )));
+    objects.push(Box::new(Sphere::new(
+        Vec3(-4., 1., 0.),
+        1.,
+        Arc::new(Lambertian::new(Vec3(0.4, 0.2, 0.1)))
+    )));
+    objects.push(Box::new(Sphere::new(
+        Vec3(4., 1., 0.),
+        1.,
+        Arc::new(Metal::new(Vec3(0.7, 0.6, 0.5), 0.))
+    )));
+
+    HittableCollection::new(objects)
 }
 
 fn main() {
@@ -57,26 +117,19 @@ fn main() {
         Ok(f) => f,
     };
 
-    let world = HittableCollection::new(
-        vec!(
-            Box::new(Sphere::new(
-                Vec3(0., 0., -1.),
-                0.5,
-                Lambertian::new(Vec3::default())
-            )),
-            Box::new(Sphere::new(
-                Vec3(0., -100.5, -1.),
-                100.,
-                Lambertian::new(Vec3::default())
-            )),
-        )
-    );
+    let world = random_scene();
 
-    let nx = 200;
-    let ny = 100;
+    let nx = 1200;
+    let ny = 800;
     let ns = 100;
 
-    let cam = Camera::default();
+    let look_from = Vec3(13., 2., 3.);
+    let look_at = Vec3(0., 0., 0.);
+    let dist_to_focus = 10.;
+    let aperture = 0.1;
+    let aspect = nx as f64 / ny as f64;
+
+    let cam = Camera::new(look_from, look_at, Vec3(0., 1., 0.), 20., aspect, aperture, dist_to_focus);
 
     write!(file, "P3\n{} {}\n255\n", nx, ny).expect("Fail to write");
 
@@ -85,13 +138,14 @@ fn main() {
     let mut rng: Xoroshiro128 = Rand::rand(&mut sm);
 
     for j in 0..ny {
+        println!("\033[1ALine: {}", j + 1);
         for i in 0..nx {
             let mut col = Vec3::default();
             for _ in 0..ns {
                 let v = ((ny - j) as f64 + rng.next_f64()) / ny as f64;
                 let u = (i as f64 + rng.next_f64()) / nx as f64;
                 let r = cam.get_ray(u, v);
-                col = col + color(&r, &world);
+                col = col + color(&r, &world, 0);
             }
 
             col = col / ns as f64;
